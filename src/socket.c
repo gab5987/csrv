@@ -2,6 +2,7 @@
 #include "cmmutils.h"
 #include <arpa/inet.h>
 #include <pthread.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -31,8 +32,8 @@ static void *connectionHandler(void *p_args)
 
     int client_socket = server->client_socket;
     char *buffer = (char *)malloc(sizeof(char) * MAX_BUFFER_SIZE);
-    char *method = (char *)malloc(sizeof(char) * 5);
-    char *route = (char *)malloc(sizeof(char) * MAX_ROUTE_LEN);
+    char method[5] = {0};
+    char route[MAX_ROUTE_LEN] = {0};
     ssize_t bytes_received;
 
     if ((bytes_received = read(client_socket, buffer, MAX_BUFFER_SIZE - 1)) < 0)
@@ -60,7 +61,9 @@ static void *connectionHandler(void *p_args)
         }
 
         const struct SocketRoute_t *current_route = &server->routes[i];
-        if (strncmp(route, current_route->path, strlen(current_route->path)) == 0)
+        size_t current_path_len = strlen(current_route->path), req_path_len = strlen(route);
+
+        if (current_path_len == req_path_len && strncmp(route, current_route->path, current_path_len) == 0)
         {
             if (strcmp(method, "GET") == 0)
             {
@@ -86,10 +89,6 @@ static void *connectionHandler(void *p_args)
 cleanup:
     if (buffer != NULL)
         free(buffer);
-    if (method != NULL)
-        free(method);
-    if (route != NULL)
-        free(route);
     if (client_socket >= 0)
         close(client_socket);
 exit:
