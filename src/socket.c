@@ -5,58 +5,37 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/_types/_null.h>
 #include <unistd.h>
 
 #define PORT 8080
 #define MAX_BUFFER_SIZE 1024 * 1000 /* ~1Mb */
+#define MAX_ROUTE_LEN 32            /* 32 chars */
 #define SA struct sockaddr
 #define ST struct Server_t
 
-typedef struct
-{
-    int client_socket;
-} ThreadArgs;
+#define RESPONSEMET(hand, c, d)                                                                                        \
+    if (hand != NULL)                                                                                                  \
+        hand(c, d);                                                                                                    \
+    else                                                                                                               \
+        goto not_implemented;
 
-void handleGet(int client_socket)
-{
-    const char response[] = "Hello, World!\n";
-    const char header[] = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n";
-
-    // Calculate the content length
-    char content_length_header[50];
-    sprintf(content_length_header, "Content-Length: %zu\r\n", strlen(response));
-
-    write(client_socket, header, strlen(header));                               // Header
-    write(client_socket, content_length_header, strlen(content_length_header)); // Content len
-    write(client_socket, "\r\n", 2);                                            // End of header
-    write(client_socket, response, strlen(response));                           // Body
-}
-
-void handlePost(int client_socket, char *data)
-{
-    char response[MAX_BUFFER_SIZE] = "teste aaaaa\n";
-    LoggerMessage(INFO, "received POST request: %s", data);
-    write(client_socket, response, strlen(response));
-}
-
-void handlePut(int client_socket, char *data)
-{
-    char response[MAX_BUFFER_SIZE];
-    LoggerMessage(INFO, "Received PUT data: %s", data);
-    write(client_socket, response, strlen(response));
-}
+static const char response404[] = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\n\r\n";
+static const char response501[] = "HTTP/1.1 501 Not Implemented\r\nContent-Type: text/plain\r\n\r\n";
 
 static void *connectionHandler(void *p_args)
 {
-    ThreadArgs *args = (ThreadArgs *)p_args;
-    if (args == NULL)
+    ST *server = (ST *)p_args;
+    if (server == NULL)
         goto exit;
 
-    int client_socket = args->client_socket;
+    int client_socket = server->client_socket;
     char *buffer = (char *)malloc(sizeof(char) * MAX_BUFFER_SIZE);
+    char *method = (char *)malloc(sizeof(char) * 5);
+    char *route = (char *)malloc(sizeof(char) * MAX_ROUTE_LEN);
     ssize_t bytes_received;
 
-    if ((bytes_received = read(client_socket, buffer, sizeof(buffer) - 1)) < 0)
+    if ((bytes_received = read(client_socket, buffer, MAX_BUFFER_SIZE - 1)) < 0)
     {
         LoggerMessage(ERROR, "error reading from socket (buffer reads less than 0)");
         goto cleanup;
@@ -64,31 +43,56 @@ static void *connectionHandler(void *p_args)
 
     buffer[bytes_received] = '\0'; // ensures that the last byte is a null terminator
 
-    char *method = (char *)malloc(sizeof(char) * 5);
     sscanf(buffer, "%s", method);
+    sscanf(buffer + strlen(method), "%s", route);
 
     char *data = strchr(buffer, '\n');
     if (data != NULL)
         data++;
 
-    if (strcmp(method, "GET") == 0)
-        handleGet(client_socket);
-    else if (strcmp(method, "POST") == 0)
-        handlePost(client_socket, data);
-    else if (strcmp(method, "PUT") == 0)
-        handlePut(client_socket, data);
-    else
+    for (int i = 0; i <= server->total_routes; i++)
     {
-        char response[] = "HTTP/1.1 501 Not Implemented\r\n\r\n";
-        write(client_socket, response, strlen(response));
+        // If no route matches, return a 404 Not Found response
+        if (i == server->total_routes)
+        {
+            write(client_socket, response404, strlen(response404));
+            break;
+        }
+
+        const struct SocketRoute_t *current_route = &server->routes[i];
+        if (strncmp(route, current_route->path, strlen(current_route->path)) == 0)
+        {
+            if (strcmp(method, "GET") == 0)
+            {
+                RESPONSEMET(current_route->handleGet, client_socket, data);
+            }
+            else if (strcmp(method, "POST") == 0)
+            {
+                RESPONSEMET(current_route->handlePost, client_socket, data);
+            }
+            else if (strcmp(method, "PUT") == 0)
+            {
+                RESPONSEMET(current_route->handlePut, client_socket, data);
+            }
+            else
+            {
+            not_implemented:
+                write(client_socket, response501, strlen(response501));
+            }
+            break;
+        }
     }
 
 cleanup:
     if (buffer != NULL)
         free(buffer);
+    if (method != NULL)
+        free(method);
+    if (route != NULL)
+        free(route);
+    if (client_socket >= 0)
+        close(client_socket);
 exit:
-    if (args != NULL)
-        free(args);
     pthread_exit(NULL);
 }
 
@@ -105,22 +109,11 @@ static void *socketAccept(void *args)
             continue;
         }
 
-        ThreadArgs *args = (ThreadArgs *)malloc(sizeof(ThreadArgs));
-        if (args == NULL)
-        {
-            LoggerMessage(ERROR, "Error allocating memory for thread args");
-            close(server->client_socket);
-            continue;
-        }
-
-        args->client_socket = server->client_socket;
-
         pthread_t thread_id;
-        if (pthread_create(&thread_id, NULL, connectionHandler, (void *)args) != 0)
+        if (pthread_create(&thread_id, NULL, connectionHandler, (void *)server) != 0)
         {
             LoggerMessage(ERROR, "Error creating thread");
             close(server->client_socket);
-            free(args);
         }
     }
 
