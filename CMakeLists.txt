@@ -10,6 +10,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 include_directories(include)
 
+add_subdirectory(lib)
+
 file(GLOB SOURCES src/*.c)
 
 find_package (mongoc-1.0 1.7 REQUIRED)
@@ -21,6 +23,7 @@ set_target_properties(csrv PROPERTIES
 )
 target_link_libraries (csrv PRIVATE mongo::mongoc_shared)
 target_link_libraries(csrv PRIVATE pthread)
+target_link_libraries(csrv PRIVATE cJSON)
 
 install(TARGETS ${OBJECT_FILES}
     RUNTIME DESTINATION bin

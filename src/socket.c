@@ -22,8 +22,8 @@
     else                                                                                                               \
         goto not_implemented;
 
-static const char response404[] = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\n\r\n";
-static const char response501[] = "HTTP/1.1 501 Not Implemented\r\nContent-Type: text/plain\r\n\r\n";
+const char response404[] = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\n\r\n";
+const char response501[] = "HTTP/1.1 501 Not Implemented\r\nContent-Type: text/plain\r\n\r\n";
 
 static pthread_mutex_t thread_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_t thread_pool[THREAD_POOL_SIZE];
