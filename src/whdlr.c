@@ -1,6 +1,6 @@
 #include "whdlr.h"
 #include "socket.h"
-#include "cJSON/cJSON.h"
+#include "cJSON.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -22,6 +22,7 @@ static void getHandler(int client_socket, char *data __attribute__((unused)))
 static void postHandler(int client_socket, char *data)
 {
     cJSON *root = cJSON_Parse(data);
+
     getHandler(client_socket, data);
 }
 
