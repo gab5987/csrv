@@ -6,12 +6,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/_types/_null.h>
 #include <unistd.h>
 
 #define PORT 8080
 #define MAX_BUFFER_SIZE 1024 * 1000 /* ~1Mb */
 #define MAX_ROUTE_LEN 32            /* 32 chars */
+#define THREAD_POOL_SIZE 10
+
 #define SA struct sockaddr
 #define ST struct Server_t
 
@@ -24,11 +25,48 @@
 static const char response404[] = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\n\r\n";
 static const char response501[] = "HTTP/1.1 501 Not Implemented\r\nContent-Type: text/plain\r\n\r\n";
 
-static void *connectionHandler(void *p_args)
+static pthread_mutex_t thread_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_t thread_pool[THREAD_POOL_SIZE];
+
+struct QueueNode
 {
-    ST *server = (ST *)p_args;
+    struct QueueNode *next;
+    int *client_socket;
+};
+typedef struct QueueNode QueueNode_t;
+
+static QueueNode_t *queue_head = NULL;
+static QueueNode_t *queue_tail = NULL;
+
+void enqueue(int *client_socket)
+{
+    QueueNode_t *newnode = malloc(sizeof(QueueNode_t));
+    newnode->client_socket = client_socket;
+    newnode->next = NULL;
+    if (queue_tail == NULL)
+        queue_head = newnode;
+    else
+        queue_tail->next = newnode;
+    queue_tail = newnode;
+}
+
+int *dequeue(void)
+{
+    if (queue_head == NULL)
+        return NULL;
+    int *result = queue_head->client_socket;
+    QueueNode_t *temp = queue_head;
+    queue_head = queue_head->next;
+    if (queue_head == NULL)
+        queue_tail = NULL;
+    free(temp);
+    return result;
+}
+
+static void connectionHandler(ST *server)
+{
     if (server == NULL)
-        goto exit;
+        return;
 
     int client_socket = server->client_socket;
     char *buffer = (char *)malloc(sizeof(char) * MAX_BUFFER_SIZE);
@@ -36,7 +74,7 @@ static void *connectionHandler(void *p_args)
     char route[MAX_ROUTE_LEN] = {0};
     ssize_t bytes_received;
 
-    if ((bytes_received = read(client_socket, buffer, MAX_BUFFER_SIZE - 1)) < 0)
+    if ((bytes_received = read(client_socket, buffer, MAX_BUFFER_SIZE)) < 0)
     {
         LoggerMessage(ERROR, "error reading from socket (buffer reads less than 0)");
         goto cleanup;
@@ -65,6 +103,7 @@ static void *connectionHandler(void *p_args)
 
         if (current_path_len == req_path_len && strncmp(route, current_route->path, current_path_len) == 0)
         {
+            data = HttpdBodyParser(data);
             if (strcmp(method, "GET") == 0)
             {
                 RESPONSEMET(current_route->handleGet, client_socket, data);
@@ -91,11 +130,24 @@ cleanup:
         free(buffer);
     if (client_socket >= 0)
         close(client_socket);
-exit:
-    pthread_exit(NULL);
 }
 
-static void *socketAccept(void *args)
+static void *sockThread(void *args)
+{
+    ST *server = (ST *)args;
+    while (1)
+    {
+        pthread_mutex_lock(&thread_mutex);
+        int *pclient_socket = dequeue();
+        pthread_mutex_unlock(&thread_mutex);
+        if (pclient_socket != NULL)
+        {
+            connectionHandler(server);
+        }
+    }
+}
+
+void *serverAccept(void *args)
 {
     ST *server = (ST *)args;
     socklen_t addr_len = sizeof(server->client_addr);
@@ -108,25 +160,26 @@ static void *socketAccept(void *args)
             continue;
         }
 
-        pthread_t thread_id;
-        if (pthread_create(&thread_id, NULL, connectionHandler, (void *)server) != 0)
-        {
-            LoggerMessage(ERROR, "Error creating thread");
-            close(server->client_socket);
-        }
-    }
+        int *pclient_socket = malloc(sizeof(int));
+        *pclient_socket = server->client_socket;
 
-    return NULL;
+        pthread_mutex_lock(&thread_mutex);
+        enqueue(pclient_socket);
+        pthread_mutex_unlock(&thread_mutex);
+    }
 }
 
-ST *SocketInit(void)
+ST *SocketInit(const struct SocketRoute_t *routes, int total_routes)
 {
     ST *server = (ST *)malloc(sizeof(ST));
+
+    server->routes = routes;
+    server->total_routes = total_routes;
 
     if ((server->server_socket = socket(AF_INET, SOCK_STREAM, 0)) == -1)
     {
         LoggerMessage(ERROR, "Error creating socket");
-        exit(EXIT_FAILURE);
+        goto exit_err;
     }
 
     server->server_addr.sin_family = AF_INET;
@@ -136,23 +189,32 @@ ST *SocketInit(void)
     if (bind(server->server_socket, (SA *)&server->server_addr, sizeof(server->server_addr)) == -1)
     {
         LoggerMessage(ERROR, "Error binding socket");
-        exit(EXIT_FAILURE);
+        goto exit_err;
     }
 
     if (listen(server->server_socket, 10) == -1)
     {
         LoggerMessage(ERROR, "Error listening for connections");
-        exit(EXIT_FAILURE);
+        goto exit_err;
     }
 
     LoggerMessage(INFO, "Server listening on port %d...\n", PORT);
 
-    if (pthread_create(&server->thread_id, NULL, socketAccept, (void *)server) != 0)
+    for (int i = 0; i < THREAD_POOL_SIZE; i++)
     {
-        LoggerMessage(ERROR, "Error creating thread");
-        close(server->client_socket);
+        if (pthread_create(&thread_pool[i], NULL, sockThread, server) < 0)
+            LoggerMessage(WARNING, "failed to create thread %d", i);
+    }
+
+    if (pthread_create(&server->thread_id, NULL, serverAccept, server) < 0)
+    {
+        LoggerMessage(ERROR, "failed to create server thread");
+        goto exit_err;
     }
 
     return server;
+exit_err:
+    free(server);
+    return NULL;
 }
 

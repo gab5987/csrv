@@ -12,5 +12,6 @@ typedef enum
 } LogLevel_t;
 
 void LoggerMessage(LogLevel_t level, const char *format, ...);
+char *HttpdBodyParser(const char *req);
 
 #endif // !_CONFIG_H_

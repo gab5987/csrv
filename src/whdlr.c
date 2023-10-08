@@ -1,8 +1,9 @@
 #include "whdlr.h"
 #include "socket.h"
+#include <stdio.h>
 #include <string.h>
 
-static void getHandler(int client_socket, char *data)
+static void getHandler(int client_socket, char *data __attribute__((unused)))
 {
     const char response[] = "Hello, World!\n";
     const char header[] = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n";
@@ -17,13 +18,18 @@ static void getHandler(int client_socket, char *data)
     write(client_socket, response, strlen(response));                           // Body
 }
 
+static void postHandler(int client_socket, char *data)
+{
+    getHandler(client_socket, data);
+}
+
 struct SocketRoute_t GetWeatherApiRoutes(void)
 {
     return (struct SocketRoute_t){
         .path = "/whdlr",
         .handleGet = &getHandler,
         .handlePut = NULL,
-        .handlePost = NULL,
+        .handlePost = &postHandler,
         .handleDelete = NULL,
     };
 }

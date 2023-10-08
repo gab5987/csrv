@@ -2,6 +2,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 #define MAX_LINE_LENGTH 256
@@ -75,4 +76,15 @@ int CfgEnvLoader(const char *filepath)
 
     fclose(file);
     return 0;
+}
+
+char *HttpdBodyParser(const char *req)
+{
+    if (req == NULL)
+        return 0;
+    char *retaddr = NULL;
+    retaddr = strstr(req, "\r\n\r\n");
+    if (retaddr == NULL)
+        return NULL;
+    return retaddr += 4; // +4 to skip the "\r\n\r\n"
 }

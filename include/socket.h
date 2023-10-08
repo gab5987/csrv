@@ -29,6 +29,6 @@ struct Server_t
     int total_routes;
 };
 
-struct Server_t *SocketInit(void);
+struct Server_t *SocketInit(const struct SocketRoute_t *routes, int total_routes);
 
 #endif // !_SOCKET_H_
