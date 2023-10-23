@@ -10,21 +10,25 @@
 
 int main(int argc, const char **argv)
 {
-    CfgEnvLoader("../.env");
+    Cfg_EnvLoader("../.env");
 
-    struct SocketRoute_t routes[1] = {GetWeatherApiRoutes()};
-    struct Server_t *server = NULL;
-    int binding_reties = 0;
+    SocketRoute_t routes[1]      = {Whdlr_GetWeatherApiRoutes()};
+    Server_t     *server         = NULL;
+    int           binding_reties = 0;
 
 init:
-    // MongodbInit();
     if (binding_reties > 10)
     {
-        LoggerMessage(ERROR, "Server failed to boot");
+        Logger_LogMessage(ERROR, "Server failed to boot");
         goto exit;
     }
 
-    server = SocketInit(routes, 1);
+    Db_MongoInitialize();
+
+    bson_t *insert = BCON_NEW("hello", BCON_UTF8("world from method"));
+    Db_InsertDocument("db_name", "collection", insert);
+
+    server = Soc_SocketInit(routes, 1);
     if (server == NULL)
     {
         binding_reties++;
@@ -34,11 +38,7 @@ init:
 
     pthread_join(server->thread_id, NULL);
 
-    // bson_t *insert = BCON_NEW("hello", BCON_UTF8("world from method"));
-    // InsertDocument("db_name", "collection", insert);
-
 exit:
-    if (server != NULL)
-        free(server);
-    MongodbDestroy();
+    if (server != NULL) free(server);
+    Db_MongoDestroy();
 }

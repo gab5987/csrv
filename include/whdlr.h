@@ -3,6 +3,6 @@
 
 #include "socket.h"
 
-struct SocketRoute_t GetWeatherApiRoutes(void);
+SocketRoute_t Whdlr_GetWeatherApiRoutes(void);
 
 #endif // !_WHDLR_H_

@@ -3,8 +3,8 @@
 
 #include <mongoc/mongoc.h>
 
-int MongodbInit(void);
-void MongodbDestroy(void);
-int InsertDocument(const char *dbname, const char *collname, bson_t *insert);
+int  Db_MongoInitialize(void);
+void Db_MongoDestroy(void);
+int Db_InsertDocument(const char *dbname, const char *collname, bson_t *insert);
 
 #endif // !_DATABASE_H_

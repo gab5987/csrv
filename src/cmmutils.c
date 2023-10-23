@@ -7,9 +7,9 @@
 
 #define MAX_LINE_LENGTH 256
 
-static void getTimestamp(char *timestamp)
+static void Logger_GetTimestamp(char *timestamp)
 {
-    time_t rawtime;
+    time_t     rawtime;
     struct tm *info;
 
     time(&rawtime);
@@ -18,31 +18,31 @@ static void getTimestamp(char *timestamp)
     strftime(timestamp, 20, "%Y-%m-%d %H:%M:%S", info);
 }
 
-void LoggerMessage(LogLevel_t level, const char *format, ...)
+void Logger_LogMessage(LogLevel_t level, const char *format, ...)
 {
     va_list args;
     va_start(args, format);
 
     char timestamp[20];
-    getTimestamp(timestamp);
+    Logger_GetTimestamp(timestamp);
 
     const char *levelstr;
     switch (level)
     {
-    case DEBUG:
-        levelstr = "DEBUG";
-        break;
-    case INFO:
-        levelstr = "INFO";
-        break;
-    case WARNING:
-        levelstr = "WARNING";
-        break;
-    case ERROR:
-        levelstr = "ERROR";
-        break;
-    default:
-        levelstr = "UNKNOWN";
+        case DEBUG:
+            levelstr = "DEBUG";
+            break;
+        case INFO:
+            levelstr = "INFO";
+            break;
+        case WARNING:
+            levelstr = "WARNING";
+            break;
+        case ERROR:
+            levelstr = "ERROR";
+            break;
+        default:
+            levelstr = "UNKNOWN";
     }
 
     fprintf(stdout, "[%s] [%s] ", timestamp, levelstr);
@@ -52,20 +52,20 @@ void LoggerMessage(LogLevel_t level, const char *format, ...)
     va_end(args);
 }
 
-int CfgEnvLoader(const char *filepath)
+int Cfg_EnvLoader(const char *filepath)
 {
     FILE *file = fopen(filepath, "r");
     if (file == NULL)
     {
-        perror("Error opening file");
+        Logger_LogMessage(
+            ERROR, "no env file found for the specified path...exit");
         exit(EXIT_FAILURE);
     }
 
     char line[MAX_LINE_LENGTH];
     while (fgets(line, sizeof(line), file) != NULL)
     {
-        if (line[0] == '#')
-            continue;
+        if (line[0] == '#') continue;
 
         char key[MAX_LINE_LENGTH], value[MAX_LINE_LENGTH];
         if (sscanf(line, "%[^=]=%s", key, value) == 2)
@@ -78,13 +78,11 @@ int CfgEnvLoader(const char *filepath)
     return 0;
 }
 
-char *HttpdBodyParser(const char *req)
+char *Parser_HttpdBodyParser(const char *req)
 {
-    if (req == NULL)
-        return 0;
+    if (req == NULL) return 0;
     char *retaddr = NULL;
-    retaddr = strstr(req, "\r\n\r\n");
-    if (retaddr == NULL)
-        return NULL;
+    retaddr       = strstr(req, "\r\n\r\n");
+    if (retaddr == NULL) return NULL;
     return retaddr += 4; // +4 to skip the "\r\n\r\n"
 }
