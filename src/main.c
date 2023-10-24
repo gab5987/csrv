@@ -13,15 +13,12 @@ int main(int argc, const char **argv)
 {
     Cfg_EnvLoader("../.env");
 
-    SocketRoute_t routes[1]      = {Whdlr_GetWeatherApiRoutes()};
-    Server_t     *server         = NULL;
-    int           binding_reties = 0;
-
-    Owa_Init();
-    return 0;
+    SocketRoute_t routes[1]       = {Whdlr_GetWeatherApiRoutes()};
+    Server_t     *server          = NULL;
+    int           binding_retries = 0;
 
 init:
-    if (binding_reties > 10)
+    if (binding_retries > 10)
     {
         Logger_LogMessage(ERROR, "Server failed to boot");
         goto exit;
@@ -29,18 +26,21 @@ init:
 
     Db_MongoInitialize();
 
-    bson_t *insert = BCON_NEW("hello", BCON_UTF8("world from method"));
-    Db_InsertDocument("db_name", "collection", insert);
+    pthread_t *owathread = Owa_Init();
+    pthread_join(*owathread, NULL);
 
-    server = Soc_SocketInit(routes, 1);
-    if (server == NULL)
-    {
-        binding_reties++;
-        sleep(1);
-        goto init; // Reinit in case of failure
-    }
+    // bson_t *insert = BCON_NEW("hello", BCON_UTF8("world from method"));
+    // Db_InsertDocument("db_name", "collection", insert);
 
-    pthread_join(server->thread_id, NULL);
+    // server = Soc_SocketInit(routes, 1);
+    // if (server == NULL)
+    // {
+    //     binding_retries++;
+    //     sleep(1);
+    //     goto init; // Reinit in case of failure
+    // }
+
+    // pthread_join(server->thread_id, NULL);
 
 exit:
     if (server != NULL) free(server);

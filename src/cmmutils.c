@@ -1,4 +1,5 @@
 #include "cmmutils.h"
+#include "cJSON.h"
 
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -103,7 +104,7 @@ int Tools_HostnameToIp(char *hostname, char *ip)
 
     if ((rv = getaddrinfo(hostname, "https", &hints, &servinfo)) != 0)
     {
-        Logger_LogMessage(ERROR, "HostnameToIp: getaddrinfo: %s\n", gai_strerror(rv));
+        Logger_LogMessage(ERROR, "HostnameToIp getaddrinfo: %s\n", gai_strerror(rv));
         return 1;
     }
 
@@ -116,4 +117,17 @@ int Tools_HostnameToIp(char *hostname, char *ip)
 
     if (servinfo != NULL) freeaddrinfo(servinfo);
     return 0;
+}
+
+bool Tools_CheckJsonErr(cJSON *obj, const char *key)
+{
+    if (obj == NULL)
+    {
+        const char *error_ptr = cJSON_GetErrorPtr();
+        Logger_LogMessage(
+            ERROR, "Failed to parse JSON @ key '%s' - error_code: (%s)", key, error_ptr != NULL ? error_ptr : "");
+        cJSON_Delete(obj);
+        return false;
+    }
+    return true;
 }
