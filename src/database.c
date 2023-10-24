@@ -7,13 +7,11 @@ static mongoc_uri_t    *uri;
 
 int Db_InsertDocument(const char *dbname, const char *collname, bson_t *insert)
 {
-    mongoc_collection_t *collection =
-        mongoc_client_get_collection(database_client, dbname, collname);
-    bson_error_t error;
+    mongoc_collection_t *collection = mongoc_client_get_collection(database_client, dbname, collname);
+    bson_error_t         error;
     if (!mongoc_collection_insert_one(collection, insert, NULL, NULL, &error))
     {
-        Logger_LogMessage(
-            ERROR, "failed to insert document: %s", error.message);
+        Logger_LogMessage(ERROR, "failed to insert document: %s", error.message);
         return -1;
     }
     bson_destroy(insert);
@@ -65,12 +63,10 @@ int Db_MongoInitialize(void)
 
     command = BCON_NEW("ping", BCON_INT32(1));
 
-    bool retval = mongoc_client_command_simple(
-        database_client, "admin", command, NULL, &reply, &error);
+    bool retval = mongoc_client_command_simple(database_client, "admin", command, NULL, &reply, &error);
     if (!retval)
     {
-        Logger_LogMessage(
-            ERROR, "failed to ping database: %s\n", error.message);
+        Logger_LogMessage(ERROR, "failed to ping database: %s\n", error.message);
         return EXIT_FAILURE;
     }
 
@@ -78,8 +74,7 @@ int Db_MongoInitialize(void)
     if (str != NULL)
         Logger_LogMessage(INFO, "database ping response: %s", str);
     else
-        Logger_LogMessage(
-            WARNING, "database did not answered the ping command");
+        Logger_LogMessage(WARNING, "database did not answered the ping command");
 
     bson_destroy(&reply);
     bson_destroy(command);

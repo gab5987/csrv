@@ -57,8 +57,7 @@ int Cfg_EnvLoader(const char *filepath)
     FILE *file = fopen(filepath, "r");
     if (file == NULL)
     {
-        Logger_LogMessage(
-            ERROR, "no env file found for the specified path...exit");
+        Logger_LogMessage(ERROR, "no env file found for the specified path...exit");
         exit(EXIT_FAILURE);
     }
 

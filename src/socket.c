@@ -21,10 +21,8 @@
     else                        \
         goto not_implemented;
 
-const char response404[] =
-    "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\n\r\n";
-const char response501[] =
-    "HTTP/1.1 501 Not Implemented\r\nContent-Type: text/plain\r\n\r\n";
+const char response404[] = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\n\r\n";
+const char response501[] = "HTTP/1.1 501 Not Implemented\r\nContent-Type: text/plain\r\n\r\n";
 
 static pthread_mutex_t thread_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_t              thread_pool[THREAD_POOL_SIZE];
@@ -66,21 +64,19 @@ static void Soc_ConnectionHandler(Server_t *server)
 {
     if (server == NULL) return;
 
-    int     client_socket = server->client_socket;
-    char   *buffer        = (char *)malloc(sizeof(char) * MAX_BUFFER_SIZE);
-    char    method[5]     = {0};
+    int     client_socket        = server->client_socket;
+    char   *buffer               = (char *)malloc(sizeof(char) * MAX_BUFFER_SIZE);
+    char    method[5]            = {0};
     char    route[MAX_ROUTE_LEN] = {0};
     ssize_t bytes_received;
 
     if ((bytes_received = read(client_socket, buffer, MAX_BUFFER_SIZE)) < 0)
     {
-        Logger_LogMessage(
-            ERROR, "error reading from socket (buffer reads less than 0)");
+        Logger_LogMessage(ERROR, "error reading from socket (buffer reads less than 0)");
         goto cleanup;
     }
 
-    buffer[bytes_received] =
-        '\0'; // ensures that the last byte is a null terminator
+    buffer[bytes_received] = '\0'; // ensures that the last byte is a null terminator
 
     sscanf(buffer, "%s", method);
     sscanf(buffer + strlen(method), "%s", route);
@@ -98,11 +94,9 @@ static void Soc_ConnectionHandler(Server_t *server)
         }
 
         const SocketRoute_t *current_route    = &server->routes[i];
-        size_t               current_path_len = strlen(current_route->path),
-               req_path_len                   = strlen(route);
+        size_t               current_path_len = strlen(current_route->path), req_path_len = strlen(route);
 
-        if (current_path_len == req_path_len &&
-            strncmp(route, current_route->path, current_path_len) == 0)
+        if (current_path_len == req_path_len && strncmp(route, current_route->path, current_path_len) == 0)
         {
             data = Parser_HttpdBodyParser(data);
             if (strcmp(method, "GET") == 0)
@@ -139,7 +133,10 @@ static void *Soc_ConsumeThread(void *args)
         pthread_mutex_lock(&thread_mutex);
         int *pclient_socket = Soc_Dequeue();
         pthread_mutex_unlock(&thread_mutex);
-        if (pclient_socket != NULL) { Soc_ConnectionHandler(server); }
+        if (pclient_socket != NULL)
+        {
+            Soc_ConnectionHandler(server);
+        }
     }
 }
 
@@ -149,8 +146,7 @@ void *Soc_ServerAccept(void *args)
     socklen_t addr_len = sizeof(server->client_addr);
     while (1)
     {
-        server->client_socket = accept(
-            server->server_socket, (SA *)&server->client_addr, &addr_len);
+        server->client_socket = accept(server->server_socket, (SA *)&server->client_addr, &addr_len);
         if (server->client_socket < 0)
         {
             Logger_LogMessage(ERROR, "Error accepting connection");
@@ -183,9 +179,7 @@ Server_t *Soc_SocketInit(const SocketRoute_t *routes, int total_routes)
     server->server_addr.sin_addr.s_addr = INADDR_ANY;
     server->server_addr.sin_port        = htons(PORT);
 
-    if (bind(
-            server->server_socket, (SA *)&server->server_addr,
-            sizeof(server->server_addr)) == -1)
+    if (bind(server->server_socket, (SA *)&server->server_addr, sizeof(server->server_addr)) == -1)
     {
         Logger_LogMessage(ERROR, "Error binding socket");
         goto exit_err;
@@ -201,8 +195,7 @@ Server_t *Soc_SocketInit(const SocketRoute_t *routes, int total_routes)
 
     for (int i = 0; i < THREAD_POOL_SIZE; i++)
     {
-        if (pthread_create(&thread_pool[i], NULL, Soc_ConsumeThread, server) <
-            0)
+        if (pthread_create(&thread_pool[i], NULL, Soc_ConsumeThread, server) < 0)
             Logger_LogMessage(WARNING, "failed to create thread %d", i);
     }
 

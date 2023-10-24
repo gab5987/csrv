@@ -14,9 +14,8 @@ static void getHandler(int client_socket, char *data __attribute__((unused)))
     sprintf(content_length_header, "Content-Length: %zu\r\n", strlen(response));
 
     write(client_socket, header, strlen(header)); // Header
-    write(
-        client_socket, content_length_header,
-        strlen(content_length_header));               // Content len
+    write(client_socket, content_length_header,
+          strlen(content_length_header));             // Content len
     write(client_socket, "\r\n\r\n", 2);              // End of header
     write(client_socket, response, strlen(response)); // Body
 }

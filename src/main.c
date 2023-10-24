@@ -1,5 +1,6 @@
 #include "cmmutils.h"
 #include "database.h"
+#include "owalogger.h"
 #include "socket.h"
 #include "whdlr.h"
 
@@ -15,6 +16,9 @@ int main(int argc, const char **argv)
     SocketRoute_t routes[1]      = {Whdlr_GetWeatherApiRoutes()};
     Server_t     *server         = NULL;
     int           binding_reties = 0;
+
+    Owa_Init();
+    return 0;
 
 init:
     if (binding_reties > 10)
