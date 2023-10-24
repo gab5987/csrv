@@ -1,4 +1,8 @@
 #include "cmmutils.h"
+
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <netinet/in.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -77,11 +81,39 @@ int Cfg_EnvLoader(const char *filepath)
     return 0;
 }
 
-char *Parser_HttpdBodyParser(const char *req)
+char *Tools_HttpdBodyParser(const char *req)
 {
     if (req == NULL) return 0;
     char *retaddr = NULL;
     retaddr       = strstr(req, "\r\n\r\n");
     if (retaddr == NULL) return NULL;
     return retaddr += 4; // +4 to skip the "\r\n\r\n"
+}
+
+int Tools_HostnameToIp(char *hostname, char *ip)
+{
+    int                 sockfd;
+    struct addrinfo     hints, *servinfo, *p;
+    struct sockaddr_in *h;
+    int                 rv;
+
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family   = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+
+    if ((rv = getaddrinfo(hostname, "https", &hints, &servinfo)) != 0)
+    {
+        Logger_LogMessage(ERROR, "HostnameToIp: getaddrinfo: %s\n", gai_strerror(rv));
+        return 1;
+    }
+
+    // loop through all the results and connect to the first possible
+    for (p = servinfo; p != NULL; p = p->ai_next)
+    {
+        h = (struct sockaddr_in *)p->ai_addr;
+        strcpy(ip, inet_ntoa(h->sin_addr));
+    }
+
+    if (servinfo != NULL) freeaddrinfo(servinfo);
+    return 0;
 }

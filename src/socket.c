@@ -98,7 +98,7 @@ static void Soc_ConnectionHandler(Server_t *server)
 
         if (current_path_len == req_path_len && strncmp(route, current_route->path, current_path_len) == 0)
         {
-            data = Parser_HttpdBodyParser(data);
+            data = Tools_HttpdBodyParser(data);
             if (strcmp(method, "GET") == 0)
             {
                 RESPONSEMET(current_route->handleGet, client_socket, data);

@@ -12,6 +12,7 @@ typedef enum
 } LogLevel_t;
 
 void  Logger_LogMessage(LogLevel_t level, const char *format, ...);
-char *Parser_HttpdBodyParser(const char *req);
+char *Tools_HttpdBodyParser(const char *req);
+int   Tools_HostnameToIp(char *hostname, char *ip);
 
 #endif // !_CONFIG_H_

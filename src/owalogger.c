@@ -16,7 +16,7 @@
 
 int Owa_GetData(void)
 {
-    char *host   = "82.196.7.246"; // getenv("OPEN_WEATHER_KEY");
+    char  host[100];
     char *apikey = getenv("OPEN_WEATHER_KEY");
     char *message_fmt =
         "GET /data/3.0/onecall?lat=-27.5752&lon=-48.4326&exclude=minutely,hourly,daily&appid=%s&lang=pt_br "
@@ -24,7 +24,13 @@ int Owa_GetData(void)
 
     int  socketfd, n, sendbytes;
     SAI  servaddr;
-    char sendline[512], recvline[MAX_RECV_LINE];
+    char sendline[256], recvline[MAX_RECV_LINE];
+
+    if (Tools_HostnameToIp(getenv("OPEN_WEATHER_HOST"), host) != 0)
+    {
+        Logger_LogMessage(ERROR, "Couldnt resolve owa hostname");
+        return -1;
+    }
 
     if ((socketfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
