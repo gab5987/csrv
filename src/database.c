@@ -1,4 +1,5 @@
 #include "cmmutils.h"
+
 #include <mongoc/mongoc.h>
 #include <stdlib.h>
 
@@ -15,7 +16,29 @@ int Db_InsertDocument(const char *dbname, const char *collname, bson_t *insert)
         return -1;
     }
     bson_destroy(insert);
+    mongoc_collection_destroy(collection);
     return 0;
+}
+
+const bson_t *Db_FindDocument(const char *dbname, const char *collname, mongoc_cursor_t **cursor, bson_t *query)
+{
+    mongoc_collection_t *collection = mongoc_client_get_collection(database_client, dbname, collname);
+    const bson_t        *docs;
+
+    *cursor = mongoc_collection_find_with_opts(collection, query, NULL, NULL);
+
+    mongoc_collection_destroy(collection);
+    bson_destroy(query);
+    return docs;
+}
+
+const bson_t *Db_FindDocumentById(const char *dbname, const char *collname, mongoc_cursor_t **cursor, bson_oid_t *oid)
+{
+    bson_t       *query = BCON_NEW("_id", BCON_OID(oid));
+    const bson_t *doc   = Db_FindDocument(dbname, collname, cursor, query);
+
+    if (!mongoc_cursor_next(*cursor, &doc)) Logger_LogMessage(ERROR, "Unable to find document with the given id");
+    return doc;
 }
 
 void Db_MongoDestroy(void)

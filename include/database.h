@@ -3,8 +3,10 @@
 
 #include <mongoc/mongoc.h>
 
-int  Db_MongoInitialize(void);
-void Db_MongoDestroy(void);
-int  Db_InsertDocument(const char *dbname, const char *collname, bson_t *insert);
+int           Db_MongoInitialize(void);
+void          Db_MongoDestroy(void);
+int           Db_InsertDocument(const char *dbname, const char *collname, bson_t *insert);
+const bson_t *Db_FindDocument(const char *dbname, const char *collname, mongoc_cursor_t **cursor, bson_t *query);
+const bson_t *Db_FindDocumentById(const char *dbname, const char *collname, mongoc_cursor_t **cursor, bson_oid_t *oid);
 
 #endif // !_DATABASE_H_
