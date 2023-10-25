@@ -7,17 +7,17 @@
 
 typedef struct
 {
-    unsigned long dt;
-    unsigned long sunrise;
-    unsigned long sunset;
-    float         temp;
-    float         feels_like;
-    float         uvi;
-    unsigned int  pressure;
-    u_int8_t      humidity;
-    u_int8_t      clouds;
-    float         wind_speed;
-    u_int16_t     wind_deg;
+    unsigned long  dt;
+    unsigned long  sunrise;
+    unsigned long  sunset;
+    float          temp;
+    float          feels_like;
+    float          uvi;
+    unsigned int   pressure;
+    unsigned short humidity;
+    unsigned short clouds;
+    float          wind_speed;
+    unsigned short wind_deg;
 } WeatherapiDescCurrentWeather_t;
 
 pthread_t *Owa_Init(void);
