@@ -26,21 +26,31 @@ init:
 
     Db_MongoInitialize();
 
+    mongoc_cursor_t *cursor;
+    const bson_t    *doc = Db_Paginate("weather", "owa", &cursor, 5, 3, NULL);
+
+    while (mongoc_cursor_next(cursor, &doc))
+    {
+        char *str = bson_as_canonical_extended_json(doc, NULL);
+        printf("\n%s\n", str);
+    }
+
+    return 0;
     pthread_t *owathread = Owa_Init();
-    pthread_join(*owathread, NULL);
 
     // bson_t *insert = BCON_NEW("hello", BCON_UTF8("world from method"));
     // Db_InsertDocument("db_name", "collection", insert);
 
-    // server = Soc_SocketInit(routes, 1);
-    // if (server == NULL)
-    // {
-    //     binding_retries++;
-    //     sleep(1);
-    //     goto init; // Reinit in case of failure
-    // }
+    server = Soc_SocketInit(routes, 1);
+    if (server == NULL)
+    {
+        binding_retries++;
+        sleep(1);
+        goto init; // Reinit in case of failure
+    }
 
-    // pthread_join(server->thread_id, NULL);
+    pthread_join(server->thread_id, NULL);
+    pthread_join(*owathread, NULL);
 
 exit:
     if (server != NULL) free(server);

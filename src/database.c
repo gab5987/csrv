@@ -35,10 +35,31 @@ const bson_t *Db_FindDocument(const char *dbname, const char *collname, mongoc_c
 const bson_t *Db_FindDocumentById(const char *dbname, const char *collname, mongoc_cursor_t **cursor, bson_oid_t *oid)
 {
     bson_t       *query = BCON_NEW("_id", BCON_OID(oid));
-    const bson_t *doc   = Db_FindDocument(dbname, collname, cursor, query);
+    bson_error_t  error;
+    const bson_t *doc = Db_FindDocument(dbname, collname, cursor, query);
 
-    if (!mongoc_cursor_next(*cursor, &doc)) Logger_LogMessage(ERROR, "Unable to find document with the given id");
+    mongoc_cursor_next(*cursor, &doc);
+    if (mongoc_cursor_error(*cursor, &error))
+        Logger_LogMessage(ERROR, "Unable to find document with the given id, %s", error.message);
+
     return doc;
+}
+
+const bson_t *Db_Paginate(
+    const char *dbname, const char *collname, mongoc_cursor_t **cursor, int limit, int page, bson_t *query)
+{
+    if (query == NULL) query = bson_new();
+
+    bson_t *opts = BCON_NEW("limit", BCON_INT64(limit), "skip", BCON_INT64(page * limit));
+
+    mongoc_collection_t *collection = mongoc_client_get_collection(database_client, dbname, collname);
+    const bson_t        *docs;
+
+    *cursor = mongoc_collection_find_with_opts(collection, query, opts, NULL);
+
+    bson_destroy(opts);
+    mongoc_collection_destroy(collection);
+    return docs;
 }
 
 void Db_MongoDestroy(void)
