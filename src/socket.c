@@ -10,11 +10,10 @@
 #include <time.h>
 #include <unistd.h>
 
-#define PORT             8080
-#define MAX_BUFFER_SIZE  1024 * 1000 /* ~1Mb */
-#define MAX_ROUTE_LEN    32          /* 32 chars */
-#define MAX_ARGS_LEN     128
-#define THREAD_POOL_SIZE 10
+#define PORT            8080
+#define MAX_BUFFER_SIZE 1024 * 1000 /* ~1Mb */
+#define MAX_ROUTE_LEN   32          /* 32 chars */
+#define MAX_ARGS_LEN    128
 
 #define SA struct sockaddr
 
@@ -27,57 +26,20 @@
 const char response404[] = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\n\r\n";
 const char response501[] = "HTTP/1.1 501 Not Implemented\r\nContent-Type: text/plain\r\n\r\n";
 
-static pthread_mutex_t thread_mutex = PTHREAD_MUTEX_INITIALIZER;
-
-typedef struct
-{
-    pthread_t thread_id;
-    bool      is_active;
-} Thread_t;
-Thread_t thread_pool[THREAD_POOL_SIZE];
-
 typedef struct
 {
     Server_t *server;
-    int       pool_index;
+    pthread_t thr;
+    int       pclient_socket;
 } TheradParams_t;
 
-struct QueueNode
+static void *Soc_ConnectionHandler(void *thread_params)
 {
-    struct QueueNode *next;
-    int              *client_socket;
-};
-typedef struct QueueNode QueueNode_t;
+    TheradParams_t *params = (TheradParams_t *)thread_params;
+    Server_t       *server = params->server;
 
-static QueueNode_t *queue_head = NULL;
-static QueueNode_t *queue_tail = NULL;
+    if (server == NULL) pthread_cancel(params->thr);
 
-void Soc_Enqueue(int *client_socket)
-{
-    QueueNode_t *newnode   = malloc(sizeof(QueueNode_t));
-    newnode->client_socket = client_socket;
-    newnode->next          = NULL;
-    if (queue_tail == NULL)
-        queue_head = newnode;
-    else
-        queue_tail->next = newnode;
-    queue_tail = newnode;
-}
-
-int *Soc_Dequeue(void)
-{
-    if (queue_head == NULL) return NULL;
-    int         *result = queue_head->client_socket;
-    QueueNode_t *temp   = queue_head;
-    queue_head          = queue_head->next;
-    if (queue_head == NULL) queue_tail = NULL;
-    free(temp);
-    return result;
-}
-
-static void Soc_ConnectionHandler(Server_t *server)
-{
-    if (server == NULL) return;
     struct timespec start, end;
     clock_gettime(CLOCK_MONOTONIC_RAW, &start);
     int     client_socket        = server->client_socket;
@@ -152,22 +114,8 @@ cleanup:
 
     if (buffer != NULL) free(buffer);
     if (client_socket >= 0) close(client_socket);
-}
-
-static void *Soc_ConsumeThread(void *args)
-{
-    TheradParams_t *params = (TheradParams_t *)args;
-
-    pthread_mutex_lock(&thread_mutex);
-    int *pclient_socket = Soc_Dequeue();
-    pthread_mutex_unlock(&thread_mutex);
-    if (pclient_socket != NULL)
-    {
-        Soc_ConnectionHandler(params->server);
-        free(pclient_socket);
-    }
-    thread_pool[params->pool_index].is_active = false;
-    free(params);
+    if (params != NULL) free(params);
+    pthread_exit(NULL);
 }
 
 void *Soc_ServerAccept(void *args)
@@ -183,26 +131,12 @@ void *Soc_ServerAccept(void *args)
             continue;
         }
 
-        int *pclient_socket = malloc(sizeof(int));
-        *pclient_socket     = server->client_socket;
+        TheradParams_t *pool = malloc(sizeof(TheradParams_t));
+        pool->pclient_socket = server->client_socket;
+        pool->server         = server;
 
-        for (int i = 0; i < THREAD_POOL_SIZE; i++)
-        {
-            if (thread_pool[i].is_active) continue;
-
-            TheradParams_t *pool = malloc(sizeof(TheradParams_t));
-            pool->pool_index     = i;
-            pool->server         = server;
-
-            if (pthread_create(&thread_pool[i].thread_id, NULL, Soc_ConsumeThread, pool) < 0)
-                Logger_LogMessage(WARNING, "failed to create thread %d", i);
-            else
-                break;
-        }
-
-        pthread_mutex_lock(&thread_mutex);
-        Soc_Enqueue(pclient_socket);
-        pthread_mutex_unlock(&thread_mutex);
+        if (pthread_create(&pool->thr, NULL, Soc_ConnectionHandler, pool) < 0)
+            Logger_LogMessage(WARNING, "failed to create thread for client %d", pool->pclient_socket);
     }
 }
 
@@ -248,6 +182,6 @@ Server_t *Soc_SocketInit(const SocketRoute_t *routes, int total_routes)
 
     return server;
 exit_err:
-    free(server);
+    if (server != NULL) free(server);
     return NULL;
 }

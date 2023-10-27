@@ -17,7 +17,7 @@ file(GLOB SOURCES src/*.c)
 find_package (mongoc-1.0 1.7 REQUIRED)
 
 add_executable(csrv ${SOURCES})
-target_compile_options(csrv PRIVATE -g)
+target_compile_options(csrv PRIVATE -g -Wall -Wextra -O0)
 set_target_properties(csrv PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
 )
