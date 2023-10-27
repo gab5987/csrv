@@ -1,5 +1,7 @@
+#include "database.h"
 #include "cmmutils.h"
 
+#include <math.h>
 #include <mongoc/mongoc.h>
 #include <stdlib.h>
 
@@ -45,21 +47,46 @@ const bson_t *Db_FindDocumentById(const char *dbname, const char *collname, mong
     return doc;
 }
 
-const bson_t *Db_Paginate(
-    const char *dbname, const char *collname, mongoc_cursor_t **cursor, int limit, int page, bson_t *query)
+DbPagination_t *Db_Paginate(const char *dbname, const char *collname, int limit, int page, bson_t *query)
 {
     if (query == NULL) query = bson_new();
 
-    bson_t *opts = BCON_NEW("limit", BCON_INT64(limit), "skip", BCON_INT64(page * limit));
+    int     skip = page * limit;
+    bson_t *opts = BCON_NEW("limit", BCON_INT64(limit), "skip", BCON_INT64(skip));
 
-    mongoc_collection_t *collection = mongoc_client_get_collection(database_client, dbname, collname);
-    const bson_t        *docs;
+    mongoc_collection_t *collection      = mongoc_client_get_collection(database_client, dbname, collname);
+    DbPagination_t      *pagination_data = malloc(sizeof(DbPagination_t));
 
-    *cursor = mongoc_collection_find_with_opts(collection, query, opts, NULL);
+    if (pagination_data == NULL)
+    {
+        Logger_LogMessage(ERROR, "Error allocating space for pagination_data");
+        goto cleanup;
+    }
 
+    pagination_data->docs = bson_new();
+
+    pagination_data->total_docs = mongoc_collection_count_documents(collection, query, opts, NULL, NULL, NULL);
+    pagination_data->cursor     = mongoc_collection_find_with_opts(collection, query, opts, NULL);
+
+    pagination_data->total_pages   = (int)ceil(pagination_data->total_docs / limit);
+    pagination_data->has_next_page = page < pagination_data->total_pages;
+
+cleanup:
     bson_destroy(opts);
     mongoc_collection_destroy(collection);
-    return docs;
+    return pagination_data;
+}
+
+void Db_PaginationFree(const DbPagination_t *pagination_data)
+{
+    if (pagination_data == NULL) return;
+
+    // bson_t          *docs   = pagination_data->docs;
+    // mongoc_cursor_t *cursor = pagination_data->cursor;
+
+    // if (docs != NULL) bson_destroy(docs);
+    // if (cursor != NULL) mongoc_cursor_destroy(cursor);
+    // free((void *)pagination_data);
 }
 
 void Db_MongoDestroy(void)

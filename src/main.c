@@ -17,6 +17,8 @@ int main(int argc, const char **argv)
     Server_t     *server          = NULL;
     int           binding_retries = 0;
 
+    Db_MongoInitialize();
+
 init:
     if (binding_retries > 10)
     {
@@ -24,19 +26,7 @@ init:
         goto exit;
     }
 
-    Db_MongoInitialize();
-
-    mongoc_cursor_t *cursor;
-    const bson_t    *doc = Db_Paginate("weather", "owa", &cursor, 5, 3, NULL);
-
-    while (mongoc_cursor_next(cursor, &doc))
-    {
-        char *str = bson_as_canonical_extended_json(doc, NULL);
-        printf("\n%s\n", str);
-    }
-
-    return 0;
-    pthread_t *owathread = Owa_Init();
+    // pthread_t *owathread = Owa_Init();
 
     // bson_t *insert = BCON_NEW("hello", BCON_UTF8("world from method"));
     // Db_InsertDocument("db_name", "collection", insert);
@@ -50,7 +40,7 @@ init:
     }
 
     pthread_join(server->thread_id, NULL);
-    pthread_join(*owathread, NULL);
+    // pthread_join(*owathread, NULL);
 
 exit:
     if (server != NULL) free(server);

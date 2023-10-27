@@ -8,7 +8,7 @@
 #include <string.h>
 #include <unistd.h>
 
-typedef void (*SocketHandlerOp)(int client_socket, char *data);
+typedef void (*SocketHandlerOp)(int client_socket, char *args, char *data);
 
 typedef struct
 {

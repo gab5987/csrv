@@ -1,5 +1,6 @@
 #include "cmmutils.h"
 #include "cJSON.h"
+#include "database.h"
 
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -11,6 +12,12 @@
 #include <time.h>
 
 #define MAX_LINE_LENGTH 256
+
+#define TERMLOG(l, str, c) \
+    case l:                \
+        levelstr = str;    \
+        color    = c;      \
+        break;
 
 static void Logger_GetTimestamp(char *timestamp)
 {
@@ -31,26 +38,30 @@ void Logger_LogMessage(LogLevel_t level, const char *format, ...)
     char timestamp[20];
     Logger_GetTimestamp(timestamp);
 
+    char        logmsg[100] = {0};
     const char *levelstr;
     switch (level)
     {
-        case DEBUG:
-            levelstr = "DEBUG";
+        case DEBUG: {
+            fprintf(stdout, KCYN("[%s] [%s]") " ", timestamp, "DEBUG");
             break;
-        case INFO:
-            levelstr = "INFO";
+        }
+        case INFO: {
+            fprintf(stdout, KWHT("[%s] [%s]") " ", timestamp, "INFO");
             break;
-        case WARNING:
-            levelstr = "WARNING";
+        }
+        case WARNING: {
+            fprintf(stdout, KYEL("[%s] [%s]") " ", timestamp, "WARNING");
             break;
-        case ERROR:
-            levelstr = "ERROR";
+        }
+        case ERROR: {
+            fprintf(stdout, KRED("[%s] [%s]") " ", timestamp, "ERROR");
             break;
+        }
         default:
             levelstr = "UNKNOWN";
     }
 
-    fprintf(stdout, "[%s] [%s] ", timestamp, levelstr);
     vfprintf(stdout, format, args);
     fprintf(stdout, "\n");
 
@@ -89,6 +100,37 @@ char *Tools_HttpdBodyParser(const char *req)
     retaddr       = strstr(req, "\r\n\r\n");
     if (retaddr == NULL) return NULL;
     return retaddr += 4; // +4 to skip the "\r\n\r\n"
+}
+
+int Tools_HttpdParamParser(const char *req, HttpReqParam_t *params, int max)
+{
+    int   count = 0;
+    char *tok, *otok, *str = NULL;
+    if (req == NULL) goto cleanup;
+
+    str = strdup(req);
+
+    for (tok = strtok(str, "&"); tok != NULL; tok = strtok(tok, "&"))
+    {
+        if (count >= max)
+        {
+            Logger_LogMessage(ERROR, "Exceeded the maximum number of parameters");
+            break;
+        }
+        otok = tok + strlen(tok) + 1;
+        tok  = strtok(tok, "=");
+        if (tok != NULL) params[count].param = strdup(tok);
+
+        tok = strtok(NULL, "=");
+        if (tok != NULL) params[count].value = strdup(tok);
+        tok = otok;
+
+        count++;
+    };
+
+cleanup:
+    if (str != NULL) free(str);
+    return count;
 }
 
 int Tools_HostnameToIp(char *hostname, char *ip)
@@ -130,4 +172,28 @@ bool Tools_CheckJsonErr(cJSON *obj, const char *key)
         return false;
     }
     return true;
+}
+
+char strgbff[1024];
+void Tools_WritePaginationsAsJson(const int client_socket, DbPagination_t *pagination_data)
+{
+    char he[100];
+    sprintf(
+        he, "{\"total_docs\":%d,\"total_pages\":%d,\"has_next_page\":%s,\"docs\":[", pagination_data->total_docs,
+        pagination_data->total_pages, pagination_data->has_next_page ? "true" : "false");
+    write(client_socket, he, strlen(he));
+
+    const bson_t    *docs   = pagination_data->docs;
+    mongoc_cursor_t *cursor = pagination_data->cursor;
+
+    if (docs != NULL)
+    {
+        while (mongoc_cursor_next(cursor, &docs))
+        {
+            snprintf(strgbff, sizeof(strgbff), "%s,", bson_as_json(docs, NULL));
+            write(client_socket, strgbff, strlen(strgbff));
+        }
+    }
+
+    write(client_socket, "]}", 2);
 }

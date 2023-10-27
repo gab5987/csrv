@@ -12,14 +12,15 @@
 #define PORT             8080
 #define MAX_BUFFER_SIZE  1024 * 1000 /* ~1Mb */
 #define MAX_ROUTE_LEN    32          /* 32 chars */
+#define MAX_ARGS_LEN     128
 #define THREAD_POOL_SIZE 10
 
 #define SA struct sockaddr
 
-#define RESPONSEMET(hand, c, d) \
-    if (hand != NULL)           \
-        hand(c, d);             \
-    else                        \
+#define RESPONSEMET(hand, c, a, d) \
+    if (hand != NULL)              \
+        hand(c, a, d);             \
+    else                           \
         goto not_implemented;
 
 const char response404[] = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\n\r\n";
@@ -64,11 +65,13 @@ int *Soc_Dequeue(void)
 static void Soc_ConnectionHandler(Server_t *server)
 {
     if (server == NULL) return;
-
+    struct timespec start, end;
+    clock_gettime(CLOCK_MONOTONIC_RAW, &start);
     int     client_socket        = server->client_socket;
     char   *buffer               = (char *)malloc(sizeof(char) * MAX_BUFFER_SIZE);
     char    method[5]            = {0};
     char    route[MAX_ROUTE_LEN] = {0};
+    char   *args                 = NULL;
     ssize_t bytes_received;
 
     if ((bytes_received = read(client_socket, buffer, MAX_BUFFER_SIZE)) < 0)
@@ -80,7 +83,13 @@ static void Soc_ConnectionHandler(Server_t *server)
     buffer[bytes_received] = '\0'; // ensures that the last byte is a null terminator
 
     sscanf(buffer, "%s", method);
-    sscanf(buffer + strlen(method), "%s", route);
+    sscanf((buffer + strlen(method)), "%s", route);
+    args = strchr(route, '?');
+    if (args != NULL)
+    {
+        route[args - route] = '\0';
+        args++;
+    }
 
     char *data = strchr(buffer, '\n');
     if (data != NULL) data++;
@@ -102,15 +111,15 @@ static void Soc_ConnectionHandler(Server_t *server)
             data = Tools_HttpdBodyParser(data);
             if (strcmp(method, "GET") == 0)
             {
-                RESPONSEMET(current_route->handleGet, client_socket, data);
+                RESPONSEMET(current_route->handleGet, client_socket, args, data);
             }
             else if (strcmp(method, "POST") == 0)
             {
-                RESPONSEMET(current_route->handlePost, client_socket, data);
+                RESPONSEMET(current_route->handlePost, client_socket, args, data);
             }
             else if (strcmp(method, "PUT") == 0)
             {
-                RESPONSEMET(current_route->handlePut, client_socket, data);
+                RESPONSEMET(current_route->handlePut, client_socket, args, data);
             }
             else
             {
@@ -122,6 +131,12 @@ static void Soc_ConnectionHandler(Server_t *server)
     }
 
 cleanup:
+    clock_gettime(CLOCK_MONOTONIC_RAW, &end);
+    uint64_t delta_ms = (end.tv_sec - start.tv_sec) * 1000.0 + (end.tv_nsec - start.tv_nsec) / 1.0e6;
+    Logger_LogMessage(
+        INFO, KGRN("%s %s %s SocketRuntime/::%d %ldms"), method, route, args != NULL ? args : "", client_socket,
+        delta_ms);
+
     if (buffer != NULL) free(buffer);
     if (client_socket >= 0) close(client_socket);
 }
