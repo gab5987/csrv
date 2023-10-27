@@ -22,7 +22,7 @@ static void getHandler(int client_socket, char *args, char *data __attribute__((
         if (strcmp("page", p->param) == 0)
             page = atoi(p->value);
         else if (strcmp("limit", p->param) == 0)
-            limit = atoi(p->value);
+            if ((limit = atoi(p->value)) == 0) limit = 10;
     }
 
     bson_error_t   *err;

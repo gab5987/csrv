@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 #define PORT             8080
@@ -27,7 +28,19 @@ const char response404[] = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r
 const char response501[] = "HTTP/1.1 501 Not Implemented\r\nContent-Type: text/plain\r\n\r\n";
 
 static pthread_mutex_t thread_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_t              thread_pool[THREAD_POOL_SIZE];
+
+typedef struct
+{
+    pthread_t thread_id;
+    bool      is_active;
+} Thread_t;
+Thread_t thread_pool[THREAD_POOL_SIZE];
+
+typedef struct
+{
+    Server_t *server;
+    int       pool_index;
+} TheradParams_t;
 
 struct QueueNode
 {
@@ -143,17 +156,18 @@ cleanup:
 
 static void *Soc_ConsumeThread(void *args)
 {
-    Server_t *server = (Server_t *)args;
-    while (1)
+    TheradParams_t *params = (TheradParams_t *)args;
+
+    pthread_mutex_lock(&thread_mutex);
+    int *pclient_socket = Soc_Dequeue();
+    pthread_mutex_unlock(&thread_mutex);
+    if (pclient_socket != NULL)
     {
-        pthread_mutex_lock(&thread_mutex);
-        int *pclient_socket = Soc_Dequeue();
-        pthread_mutex_unlock(&thread_mutex);
-        if (pclient_socket != NULL)
-        {
-            Soc_ConnectionHandler(server);
-        }
+        Soc_ConnectionHandler(params->server);
+        free(pclient_socket);
     }
+    thread_pool[params->pool_index].is_active = false;
+    free(params);
 }
 
 void *Soc_ServerAccept(void *args)
@@ -171,6 +185,20 @@ void *Soc_ServerAccept(void *args)
 
         int *pclient_socket = malloc(sizeof(int));
         *pclient_socket     = server->client_socket;
+
+        for (int i = 0; i < THREAD_POOL_SIZE; i++)
+        {
+            if (thread_pool[i].is_active) continue;
+
+            TheradParams_t *pool = malloc(sizeof(TheradParams_t));
+            pool->pool_index     = i;
+            pool->server         = server;
+
+            if (pthread_create(&thread_pool[i].thread_id, NULL, Soc_ConsumeThread, pool) < 0)
+                Logger_LogMessage(WARNING, "failed to create thread %d", i);
+            else
+                break;
+        }
 
         pthread_mutex_lock(&thread_mutex);
         Soc_Enqueue(pclient_socket);
@@ -191,6 +219,9 @@ Server_t *Soc_SocketInit(const SocketRoute_t *routes, int total_routes)
         goto exit_err;
     }
 
+    if (setsockopt(server->server_socket, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int)) < 0)
+        Logger_LogMessage(WARNING, "Setsockopt(SO_REUSEADDR) failed");
+
     server->server_addr.sin_family      = AF_INET;
     server->server_addr.sin_addr.s_addr = INADDR_ANY;
     server->server_addr.sin_port        = htons(PORT);
@@ -208,12 +239,6 @@ Server_t *Soc_SocketInit(const SocketRoute_t *routes, int total_routes)
     }
 
     Logger_LogMessage(INFO, "Server listening on port %d...\n", PORT);
-
-    for (int i = 0; i < THREAD_POOL_SIZE; i++)
-    {
-        if (pthread_create(&thread_pool[i], NULL, Soc_ConsumeThread, server) < 0)
-            Logger_LogMessage(WARNING, "failed to create thread %d", i);
-    }
 
     if (pthread_create(&server->thread_id, NULL, Soc_ServerAccept, server) < 0)
     {
